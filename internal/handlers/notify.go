@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/pburkhalter/waha-concierge/internal/jellyfin"
+	"github.com/pburkhalter/waha-concierge/internal/journarr"
 	"github.com/pburkhalter/waha-concierge/internal/seerr"
 	"github.com/pburkhalter/waha-concierge/internal/store"
 	"github.com/pburkhalter/waha-concierge/internal/waha"
@@ -142,13 +143,17 @@ func (b *Bot) handleRadarr(ctx context.Context, ev radarrWebhook) error {
 	// so the chat at least gets the title/year/link.
 	if poster != "" {
 		if _, err := b.WAHA.SendImage(ctx, b.Cfg.WAHAChatID, poster, body, mentions); err == nil {
+			b.Journarr.NotifyMovie(ev.Movie.TmdbID, ev.Movie.Title)
 			return nil
 		} else {
 			b.Log.Warn("sendImage failed for movie, falling back to text", "err", err, "movie", ev.Movie.Title)
 		}
 	}
-	_, err := b.WAHA.SendText(ctx, b.Cfg.WAHAChatID, body, mentions)
-	return err
+	if _, err := b.WAHA.SendText(ctx, b.Cfg.WAHAChatID, body, mentions); err != nil {
+		return err
+	}
+	b.Journarr.NotifyMovie(ev.Movie.TmdbID, ev.Movie.Title)
+	return nil
 }
 
 func (b *Bot) formatMovieNotice(ctx context.Context, ev radarrWebhook) (string, []string) {
@@ -189,7 +194,7 @@ func (b *Bot) FlushPending(ctx context.Context, wait, quietPeriod time.Duration)
 		if len(items) == 0 {
 			continue
 		}
-		body, mentions, ids, poster := b.formatEpisodeGroup(ctx, showKey, items)
+		body, mentions, ids, poster, tmdbID, seriesTitle, eps := b.formatEpisodeGroup(ctx, showKey, items)
 
 		var sendErr error
 		// WAHASendImages defaults false: on Core+NOWEB the SendImage path
@@ -222,6 +227,7 @@ func (b *Bot) FlushPending(ctx context.Context, wait, quietPeriod time.Duration)
 		if err := b.Store.MarkFlushed(ctx, ids); err != nil {
 			b.Log.Warn("mark flushed failed", "err", err, "show", showKey)
 		}
+		b.Journarr.NotifyEpisodes(tmdbID, seriesTitle, eps)
 	}
 	return nil
 }
@@ -241,14 +247,12 @@ type pendingPayload struct {
 // WhatsApp message. Mentions the requester of the series (if any) once
 // per group, not per episode. Returns the poster URL alongside so the
 // caller can pick SendImage vs SendText.
-func (b *Bot) formatEpisodeGroup(ctx context.Context, _ string, items []store.PendingImport) (body string, mentions []string, ids []int64, poster string) {
+func (b *Bot) formatEpisodeGroup(ctx context.Context, _ string, items []store.PendingImport) (body string, mentions []string, ids []int64, poster string, tmdbID int, seriesTitle string, eps []journarr.Episode) {
 	if len(items) == 0 {
-		return "", nil, nil, ""
+		return "", nil, nil, "", 0, "", nil
 	}
 	ids = make([]int64, 0, len(items))
-	tmdbID := 0
 	episodes := make([]string, 0, len(items))
-	seriesTitle := ""
 	season := 0
 	for _, it := range items {
 		ids = append(ids, it.ID)
@@ -266,6 +270,7 @@ func (b *Bot) formatEpisodeGroup(ctx context.Context, _ string, items []store.Pe
 		if poster == "" {
 			poster = p.PosterURL
 		}
+		eps = append(eps, journarr.Episode{Season: p.Season, Episode: p.Episode})
 		episodes = append(episodes,
 			fmt.Sprintf("  • S%02dE%02d — %s", p.Season, p.Episode, truncate(p.EpisodeName, 50)))
 	}
@@ -294,7 +299,7 @@ func (b *Bot) formatEpisodeGroup(ctx context.Context, _ string, items []store.Pe
 	}
 	lines = append(lines, "", "🍿 "+link)
 	body = strings.Join(lines, "\n")
-	return body, nil, ids, poster
+	return body, nil, ids, poster, tmdbID, seriesTitle, eps
 }
 
 func pluralEp(n int) string {

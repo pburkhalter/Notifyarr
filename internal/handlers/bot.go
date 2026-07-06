@@ -13,6 +13,7 @@ import (
 	"github.com/pburkhalter/waha-concierge/internal/config"
 	"github.com/pburkhalter/waha-concierge/internal/intents"
 	"github.com/pburkhalter/waha-concierge/internal/jellyfin"
+	"github.com/pburkhalter/waha-concierge/internal/journarr"
 	"github.com/pburkhalter/waha-concierge/internal/prowlarr"
 	"github.com/pburkhalter/waha-concierge/internal/radarr"
 	"github.com/pburkhalter/waha-concierge/internal/seerr"
@@ -37,6 +38,11 @@ type Bot struct {
 	// only by the /streaming-status.json aggregator for grab-quota headroom.
 	Prowlarr *prowlarr.Client
 
+	// Journarr is nil unless JOURNARR_CALLBACK_URL is set. Notified after
+	// each delivered WhatsApp notification so the flow tracker can advance
+	// the 'notified' stage.
+	Journarr *journarr.Client
+
 	// SearchTTL caps how long a numeric reply ("1") remains bound to the
 	// most recent suche from the same sender. Keep short to avoid stale
 	// replies firing requests for the wrong title.
@@ -60,6 +66,7 @@ func New(cfg *config.Config, log *slog.Logger, w *waha.Client, sr *seerr.Client,
 	if cfg.ProwlarrURL != "" && cfg.ProwlarrAPIKey != "" {
 		b.Prowlarr = prowlarr.NewClient(cfg.ProwlarrURL, cfg.ProwlarrAPIKey, cfg.HTTPTimeout)
 	}
+	b.Journarr = journarr.New(cfg.JournarrCallbackURL, cfg.JournarrCallbackToken, log)
 	return b
 }
 

@@ -86,6 +86,12 @@ type Config struct {
 	// HTTPTimeout caps every outbound API call.
 	HTTPTimeout time.Duration
 
+	// Journarr flow-tracker callback (optional). When set, the concierge
+	// POSTs a "notification.sent" event after each delivered WhatsApp
+	// notification so Journarr can mark items 'notified'. Empty URL disables.
+	JournarrCallbackURL   string
+	JournarrCallbackToken string
+
 	// WAHASendImages controls whether the flush worker attempts SendImage
 	// at all. WAHA Core on the NOWEB engine returns 422 for that endpoint,
 	// so on a Core deployment every grouped Sonarr push wastes one HTTP
@@ -145,6 +151,8 @@ func Load(environ []string) (*Config, error) {
 		LogFormat:               defaulted(get, "LOG_FORMAT", "json"),
 		HTTPTimeout:             parseDuration(get("HTTP_TIMEOUT"), 30*time.Second),
 		WAHASendImages:          parseBool(get("WAHA_SEND_IMAGES"), false),
+		JournarrCallbackURL:     strings.TrimRight(get("JOURNARR_CALLBACK_URL"), "/"),
+		JournarrCallbackToken:   get("JOURNARR_CALLBACK_TOKEN"),
 	}
 	if err := c.Validate(); err != nil {
 		return nil, err
