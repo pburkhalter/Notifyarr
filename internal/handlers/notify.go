@@ -62,6 +62,13 @@ type radarrWebhook struct {
 // /webhook/radarr respectively in main.
 func (b *Bot) WebhookHandler(source string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// When Journarr owns notifications, ignore the direct arr Connect
+		// webhooks so a completion isn't announced twice.
+		if b.Cfg.NotifyMode == "journarr" {
+			_, _ = io.Copy(io.Discard, io.LimitReader(r.Body, 1<<20))
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 		if err != nil {
 			http.Error(w, "body", http.StatusBadRequest)

@@ -103,6 +103,7 @@ func run() error {
 	mux.Handle("/webhook/radarr", bot.WebhookHandler("radarr"))
 	mux.Handle("/streaming-status.json", bot.StreamingStatusHandler())
 	mux.Handle("/trigger", bot.TriggerSearchHandler())
+	mux.Handle("/notify/send", bot.NotifyHandler()) // Journarr-owned notifications (NOTIFY_MODE=journarr)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = fmt.Fprint(w, `{"status":"ok"}`)

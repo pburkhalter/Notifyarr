@@ -100,6 +100,14 @@ type Config struct {
 	// straight to SendText. Flip to true once WAHA is upgraded to Plus or
 	// switched to WEBJS.
 	WAHASendImages bool
+
+	// NotifyMode = "direct" (default): Sonarr/Radarr Connect webhooks drive the
+	// notifications, as today. "journarr": Journarr owns them via POST
+	// /notify/send, and the direct arr webhooks are ignored (no double-send).
+	NotifyMode string
+	// NotifySendToken guards POST /notify/send (must match Journarr's
+	// CONCIERGE_API_KEY). Empty ⇒ the endpoint rejects everything.
+	NotifySendToken string
 }
 
 // LoadFromOS parses os.Environ(). Use in main.
@@ -153,6 +161,8 @@ func Load(environ []string) (*Config, error) {
 		WAHASendImages:          parseBool(get("WAHA_SEND_IMAGES"), false),
 		JournarrCallbackURL:     strings.TrimRight(get("JOURNARR_CALLBACK_URL"), "/"),
 		JournarrCallbackToken:   get("JOURNARR_CALLBACK_TOKEN"),
+		NotifyMode:              defaulted(get, "NOTIFY_MODE", "direct"),
+		NotifySendToken:         get("NOTIFY_SEND_TOKEN"),
 	}
 	if err := c.Validate(); err != nil {
 		return nil, err
@@ -191,6 +201,17 @@ func (c *Config) Validate() error {
 	case "json", "text":
 	default:
 		return fmt.Errorf("LOG_FORMAT must be one of json|text, got %q", c.LogFormat)
+	}
+	switch c.NotifyMode {
+	case "direct":
+	case "journarr":
+		// In journarr mode the direct arr webhooks are ignored, so a missing
+		// token would silently drop all notifications — fail fast instead.
+		if c.NotifySendToken == "" {
+			return fmt.Errorf("NOTIFY_MODE=journarr requires NOTIFY_SEND_TOKEN")
+		}
+	default:
+		return fmt.Errorf("NOTIFY_MODE must be one of direct|journarr, got %q", c.NotifyMode)
 	}
 	return nil
 }

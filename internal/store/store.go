@@ -256,6 +256,7 @@ type PendingImport struct {
 //     should ship something), AND
 //   - newest pending row for the show is older than `quietPeriod` (no fresh
 //     activity, so the season import has probably finished trickling in).
+//
 // The two-condition gate keeps a 22-episode Sonarr import — which lands one
 // row every few minutes — out of N individual messages; we wait until the
 // whole burst is in, then flush them as a single group. Caller flushes each
