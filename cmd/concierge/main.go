@@ -87,6 +87,7 @@ func run() error {
 	jellyClient := jellyfin.NewClient(cfg.JellyfinURL, cfg.JellyfinAPIKey, cfg.JellyfinUserID, cfg.HTTPTimeout)
 
 	bot := handlers.New(cfg, log, wahaClient, seerrClient, sonarrClient, radarrClient, jellyClient, st)
+	bot.Version = versionStr
 
 	// HTTP router. Surfaces:
 	//   /waha-webhook          ← WAHA event push (messages, joins, votes)

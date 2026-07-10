@@ -43,6 +43,10 @@ type Bot struct {
 	// the 'notified' stage.
 	Journarr *journarr.Client
 
+	// Version is the running concierge build (main.versionStr), surfaced on
+	// /streaming-status.json so Journarr can show it + check for updates.
+	Version string
+
 	// SearchTTL caps how long a numeric reply ("1") remains bound to the
 	// most recent suche from the same sender. Keep short to avoid stale
 	// replies firing requests for the wrong title.

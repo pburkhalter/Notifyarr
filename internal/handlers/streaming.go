@@ -14,6 +14,7 @@ import (
 // healthcheck file or Prowlarr is unavailable.
 type streamingStatus struct {
 	GeneratedAt time.Time       `json:"generated_at"`
+	Version     string          `json:"version,omitempty"`
 	OK          *bool           `json:"ok,omitempty"`
 	IssueCount  int             `json:"issue_count"`
 	Issues      []string        `json:"issues"`
@@ -50,7 +51,7 @@ type healthDoc struct {
 
 func (b *Bot) StreamingStatusHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		out := streamingStatus{GeneratedAt: time.Now().UTC(), Issues: []string{}}
+		out := streamingStatus{GeneratedAt: time.Now().UTC(), Version: b.Version, Issues: []string{}}
 
 		// Healthcheck issues (optional — file is mounted read-only).
 		if path := b.Cfg.HealthStatusFile; path != "" {
