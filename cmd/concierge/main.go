@@ -91,17 +91,14 @@ func run() error {
 
 	// HTTP router. Surfaces:
 	//   /waha-webhook          ← WAHA event push (messages, joins, votes)
-	//   /webhook/sonarr        ← Sonarr "Connect" outbound webhook
-	//   /webhook/radarr        ← Radarr "Connect" outbound webhook
-	//   /streaming-status.json ← dashboard aggregator (issues + SceneNZB quota)
+	//   /streaming-status.json ← dashboard aggregator (issues + WAHA status)
+	//   /notify/send           ← Journarr-owned completion notifications
 	//   /healthz               ← container healthcheck
 	mux := http.NewServeMux()
 	mux.Handle("/waha-webhook", (&waha.Receiver{
 		Handler: bot,
 		Logger:  log.With("component", "waha"),
 	}).HTTPHandler())
-	mux.Handle("/webhook/sonarr", bot.WebhookHandler("sonarr"))
-	mux.Handle("/webhook/radarr", bot.WebhookHandler("radarr"))
 	mux.Handle("/streaming-status.json", bot.StreamingStatusHandler())
 	mux.Handle("/trigger", bot.TriggerSearchHandler())
 	mux.Handle("/notify/send", bot.NotifyHandler()) // Journarr-owned notifications (NOTIFY_MODE=journarr)

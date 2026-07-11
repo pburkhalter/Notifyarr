@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"time"
 
@@ -17,162 +15,10 @@ import (
 	"github.com/pburkhalter/waha-concierge/internal/waha"
 )
 
-// ─── inbound webhook payloads (Sonarr/Radarr "Connect → Webhook") ────────
-
-// sonarrWebhook is a tolerant subset of Sonarr's outgoing Connect webhook.
-// We only read what we actually use; the real payload has many more fields.
-type sonarrWebhook struct {
-	EventType string `json:"eventType"`
-	Series    struct {
-		ID       int    `json:"id"`
-		Title    string `json:"title"`
-		TmdbID   int    `json:"tmdbId"`
-		TvdbID   int    `json:"tvdbId"`
-		ImagesV2 []struct {
-			RemoteURL string `json:"remoteUrl"`
-			Type      string `json:"coverType"`
-		} `json:"images"`
-	} `json:"series"`
-	Episodes []struct {
-		Title         string `json:"title"`
-		SeasonNumber  int    `json:"seasonNumber"`
-		EpisodeNumber int    `json:"episodeNumber"`
-	} `json:"episodes"`
-}
-
-// radarrWebhook is a tolerant subset of Radarr's outgoing Connect webhook.
-type radarrWebhook struct {
-	EventType string `json:"eventType"`
-	Movie     struct {
-		ID       int    `json:"id"`
-		Title    string `json:"title"`
-		Year     int    `json:"year"`
-		TmdbID   int    `json:"tmdbId"`
-		ImagesV2 []struct {
-			RemoteURL string `json:"remoteUrl"`
-			Type      string `json:"coverType"`
-		} `json:"images"`
-	} `json:"movie"`
-}
-
-// ─── routing ──────────────────────────────────────────────────────────────
-
-// WebhookHandler returns the http.Handler the bot exposes for upstream
-// Sonarr+Radarr Connect webhooks. Mount at e.g. /webhook/sonarr and
-// /webhook/radarr respectively in main.
-func (b *Bot) WebhookHandler(source string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// When Journarr owns notifications, ignore the direct arr Connect
-		// webhooks so a completion isn't announced twice.
-		if b.Cfg.NotifyMode == "journarr" {
-			_, _ = io.Copy(io.Discard, io.LimitReader(r.Body, 1<<20))
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-		if err != nil {
-			http.Error(w, "body", http.StatusBadRequest)
-			return
-		}
-		// Always 200 — upstream retries are noisy and uninformative.
-		go func(payload []byte) {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			if err := b.processWebhook(ctx, source, payload); err != nil {
-				b.Log.Warn("notify webhook failed",
-					"err", err, "source", source, "body_len", len(payload))
-			}
-		}(body)
-		w.WriteHeader(http.StatusOK)
-	})
-}
-
-func (b *Bot) processWebhook(ctx context.Context, source string, payload []byte) error {
-	switch source {
-	case "sonarr":
-		var ev sonarrWebhook
-		if err := json.Unmarshal(payload, &ev); err != nil {
-			return err
-		}
-		return b.handleSonarr(ctx, ev)
-	case "radarr":
-		var ev radarrWebhook
-		if err := json.Unmarshal(payload, &ev); err != nil {
-			return err
-		}
-		return b.handleRadarr(ctx, ev)
-	}
-	return fmt.Errorf("unknown source %q", source)
-}
-
-// ─── sonarr (episodes) ────────────────────────────────────────────────────
-
-// handleSonarr buffers Download events. The flush worker batches them per
-// (series, season) before sending so a season import doesn't spam the
-// chat with 20 individual pings.
-func (b *Bot) handleSonarr(ctx context.Context, ev sonarrWebhook) error {
-	if ev.EventType != "Download" && ev.EventType != "Upgrade" {
-		return nil
-	}
-	if len(ev.Episodes) == 0 || ev.Series.Title == "" {
-		return nil
-	}
-	ep := ev.Episodes[0]
-	showKey := fmt.Sprintf("sonarr:%d:%d", ev.Series.ID, ep.SeasonNumber)
-	displayName := fmt.Sprintf("%s S%02d", ev.Series.Title, ep.SeasonNumber)
-
-	payload := pendingPayload{
-		SeriesTitle: ev.Series.Title,
-		Season:      ep.SeasonNumber,
-		Episode:     ep.EpisodeNumber,
-		EpisodeName: ep.Title,
-		TmdbID:      ev.Series.TmdbID,
-		PosterURL:   pickPoster(ev.Series.ImagesV2, "poster"),
-	}
-	raw, _ := json.Marshal(payload)
-	return b.Store.EnqueuePendingImport(ctx, showKey, displayName, string(raw))
-}
-
-// ─── radarr (movies) ──────────────────────────────────────────────────────
-
-// handleRadarr ships a movie notification immediately — no batching since
-// movies arrive one at a time and the user expects a fast ping.
-func (b *Bot) handleRadarr(ctx context.Context, ev radarrWebhook) error {
-	if ev.EventType != "Download" && ev.EventType != "MovieFileImported" {
-		return nil
-	}
-	if ev.Movie.Title == "" {
-		return nil
-	}
-	body, mentions := b.formatMovieNotice(ctx, ev)
-	poster := pickPoster(ev.Movie.ImagesV2, "poster")
-	// WAHA Core + NOWEB rejects SendImage with 422; fall back to plain text
-	// so the chat at least gets the title/year/link.
-	if poster != "" {
-		if _, err := b.WAHA.SendImage(ctx, b.Cfg.WAHAChatID, poster, body, mentions); err == nil {
-			b.Journarr.NotifyMovie(ev.Movie.TmdbID, ev.Movie.Title)
-			return nil
-		} else {
-			b.Log.Warn("sendImage failed for movie, falling back to text", "err", err, "movie", ev.Movie.Title)
-		}
-	}
-	if _, err := b.WAHA.SendText(ctx, b.Cfg.WAHAChatID, body, mentions); err != nil {
-		return err
-	}
-	b.Journarr.NotifyMovie(ev.Movie.TmdbID, ev.Movie.Title)
-	return nil
-}
-
-func (b *Bot) formatMovieNotice(ctx context.Context, ev radarrWebhook) (string, []string) {
-	year := ""
-	if ev.Movie.Year > 0 {
-		year = fmt.Sprintf(" (%d)", ev.Movie.Year)
-	}
-	link := b.jellyfinLink(ctx, ev.Movie.TmdbID, "movie")
-
-	body := fmt.Sprintf("🎬 *Film:* %s%s\n🍿 %s", ev.Movie.Title, year, link)
-	return body, nil
-}
+// Direct Sonarr/Radarr "Connect → Webhook" handling was removed: Journarr now
+// owns completion notifications (NOTIFY_MODE=journarr) via POST /notify/send.
+// The shared rendering helpers below (jellyfinLink, requesterMention, the flush
+// batching) remain — they serve /notify/send and the pending-import flush.
 
 // jellyfinLink resolves the TMDB id to a Jellyfin item and builds the
 // web-client deep link. Falls back to the bare library URL when the item
