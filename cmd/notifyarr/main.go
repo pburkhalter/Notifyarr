@@ -1,8 +1,9 @@
-// Concierge: WhatsApp bot for the homelab streaming group.
+// Notifyarr: WhatsApp notifier + reactive bot for the homelab streaming group.
 //
-// Wires WAHA (WhatsApp HTTP API), Jellyseerr, Sonarr, Radarr, and Jellyfin
-// together so the group gets welcome messages, slash-style commands via
-// @bot mentions, scheduled digests + polls, and richer download notifications.
+// Receives Journarr-owned completion notifications (POST /notify/send) and
+// relays them to WhatsApp via WAHA, plus a reactive @bot command surface
+// (search/request, library, status) over Jellyseerr/Sonarr/Radarr/Jellyfin.
+// It does no active self-checks of its own.
 //
 // See docs/DESIGN.md for the architecture and command surface.
 package main
@@ -18,16 +19,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/pburkhalter/waha-concierge/internal/config"
-	"github.com/pburkhalter/waha-concierge/internal/handlers"
-	"github.com/pburkhalter/waha-concierge/internal/jellyfin"
-	"github.com/pburkhalter/waha-concierge/internal/logger"
-	"github.com/pburkhalter/waha-concierge/internal/radarr"
-	"github.com/pburkhalter/waha-concierge/internal/scheduler"
-	"github.com/pburkhalter/waha-concierge/internal/seerr"
-	"github.com/pburkhalter/waha-concierge/internal/sonarr"
-	"github.com/pburkhalter/waha-concierge/internal/store"
-	"github.com/pburkhalter/waha-concierge/internal/waha"
+	"github.com/pburkhalter/notifyarr/internal/config"
+	"github.com/pburkhalter/notifyarr/internal/handlers"
+	"github.com/pburkhalter/notifyarr/internal/jellyfin"
+	"github.com/pburkhalter/notifyarr/internal/logger"
+	"github.com/pburkhalter/notifyarr/internal/radarr"
+	"github.com/pburkhalter/notifyarr/internal/seerr"
+	"github.com/pburkhalter/notifyarr/internal/sonarr"
+	"github.com/pburkhalter/notifyarr/internal/store"
+	"github.com/pburkhalter/notifyarr/internal/waha"
 )
 
 var versionStr = "dev"
@@ -36,17 +36,17 @@ func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "version", "-v", "--version":
-			fmt.Println("concierge", versionStr)
+			fmt.Println("notifyarr", versionStr)
 			return
 		case "healthcheck":
 			os.Exit(healthcheck())
 		case "help", "-h", "--help":
-			fmt.Println(`concierge — WhatsApp bot for the streaming group.
+			fmt.Println(`notifyarr — WhatsApp notifier + bot for the streaming group.
 
 Usage:
-  concierge              Run the bot daemon.
-  concierge version      Print build version.
-  concierge healthcheck  Probe /healthz on the local listener.
+  notifyarr              Run the daemon.
+  notifyarr version      Print build version.
+  notifyarr healthcheck  Probe /healthz on the local listener.
 
 Configuration is via environment variables; see README.md.`)
 			return
@@ -64,7 +64,7 @@ func run() error {
 		return fmt.Errorf("config: %w", err)
 	}
 	log := logger.New(cfg.LogLevel, cfg.LogFormat)
-	log.Info("starting concierge",
+	log.Info("starting notifyarr",
 		"version", versionStr,
 		"listen", cfg.Listen,
 		"waha", cfg.WAHAURL,
@@ -90,36 +90,21 @@ func run() error {
 	bot.Version = versionStr
 
 	// HTTP router. Surfaces:
-	//   /waha-webhook          ← WAHA event push (messages, joins, votes)
+	//   /notify/send           ← Journarr-owned completion notifications (relayed to WhatsApp)
+	//   /waha-webhook          ← WAHA event push (bot: messages, joins, votes)
 	//   /streaming-status.json ← dashboard aggregator (issues + WAHA status)
-	//   /notify/send           ← Journarr-owned completion notifications
 	//   /healthz               ← container healthcheck
 	mux := http.NewServeMux()
+	mux.Handle("/notify/send", bot.NotifyHandler()) // Journarr-owned notifications (NOTIFY_MODE=journarr)
 	mux.Handle("/waha-webhook", (&waha.Receiver{
 		Handler: bot,
 		Logger:  log.With("component", "waha"),
 	}).HTTPHandler())
 	mux.Handle("/streaming-status.json", bot.StreamingStatusHandler())
-	mux.Handle("/trigger", bot.TriggerSearchHandler())
-	mux.Handle("/notify/send", bot.NotifyHandler()) // Journarr-owned notifications (NOTIFY_MODE=journarr)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = fmt.Fprint(w, `{"status":"ok"}`)
 	})
-
-	// Scheduler. Jobs with empty cron specs are no-ops.
-	sched := scheduler.New(log.With("component", "scheduler"))
-	if err := sched.Add(scheduler.Job{Name: "weekly_digest", Spec: cfg.CronWeeklyDigest, Run: bot.WeeklyDigest}); err != nil {
-		return fmt.Errorf("schedule digest: %w", err)
-	}
-	if err := sched.Add(scheduler.Job{Name: "weekly_poll", Spec: cfg.CronWeeklyPoll, Run: bot.WeeklyPoll}); err != nil {
-		return fmt.Errorf("schedule poll: %w", err)
-	}
-	if err := sched.Add(scheduler.Job{Name: "daily_health", Spec: cfg.CronDailyHealth, Run: bot.DailyHealth}); err != nil {
-		return fmt.Errorf("schedule health: %w", err)
-	}
-	sched.Start()
-	defer sched.Stop()
 
 	srv := &http.Server{Addr: cfg.Listen, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	errCh := make(chan error, 1)
@@ -127,13 +112,6 @@ func run() error {
 		log.Info("http listening", "addr", cfg.Listen)
 		errCh <- srv.ListenAndServe()
 	}()
-
-	// Background flush: episode-grouped notifications wait `flushAfter` for
-	// at least one row to mature AND `flushQuiet` of silence (no new rows for
-	// the show) so a slowly-trickling season import lands as one message.
-	flushAfter := 10 * time.Minute
-	flushQuiet := 5 * time.Minute
-	go flushLoop(rootCtx, bot, flushAfter, flushQuiet, log.With("component", "flush"))
 
 	// Background search-reaper: keeps the searches table small even when
 	// users open a suche and never reply.
@@ -151,21 +129,6 @@ func run() error {
 	}
 	log.Info("shutdown complete")
 	return nil
-}
-
-func flushLoop(ctx context.Context, bot *handlers.Bot, wait, quietPeriod time.Duration, log *slog.Logger) {
-	ticker := time.NewTicker(60 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if err := bot.FlushPending(ctx, wait, quietPeriod); err != nil {
-				log.Warn("flush failed", "err", err)
-			}
-		}
-	}
 }
 
 func reapLoop(ctx context.Context, st *store.Store, log *slog.Logger) {

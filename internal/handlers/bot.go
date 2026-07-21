@@ -10,16 +10,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pburkhalter/waha-concierge/internal/config"
-	"github.com/pburkhalter/waha-concierge/internal/intents"
-	"github.com/pburkhalter/waha-concierge/internal/jellyfin"
-	"github.com/pburkhalter/waha-concierge/internal/journarr"
-	"github.com/pburkhalter/waha-concierge/internal/prowlarr"
-	"github.com/pburkhalter/waha-concierge/internal/radarr"
-	"github.com/pburkhalter/waha-concierge/internal/seerr"
-	"github.com/pburkhalter/waha-concierge/internal/sonarr"
-	"github.com/pburkhalter/waha-concierge/internal/store"
-	"github.com/pburkhalter/waha-concierge/internal/waha"
+	"github.com/pburkhalter/notifyarr/internal/config"
+	"github.com/pburkhalter/notifyarr/internal/intents"
+	"github.com/pburkhalter/notifyarr/internal/jellyfin"
+	"github.com/pburkhalter/notifyarr/internal/prowlarr"
+	"github.com/pburkhalter/notifyarr/internal/radarr"
+	"github.com/pburkhalter/notifyarr/internal/seerr"
+	"github.com/pburkhalter/notifyarr/internal/sonarr"
+	"github.com/pburkhalter/notifyarr/internal/store"
+	"github.com/pburkhalter/notifyarr/internal/waha"
 )
 
 // Bot is the dispatcher. Construct it once at startup and pass to
@@ -38,12 +37,7 @@ type Bot struct {
 	// only by the /streaming-status.json aggregator for grab-quota headroom.
 	Prowlarr *prowlarr.Client
 
-	// Journarr is nil unless JOURNARR_CALLBACK_URL is set. Notified after
-	// each delivered WhatsApp notification so the flow tracker can advance
-	// the 'notified' stage.
-	Journarr *journarr.Client
-
-	// Version is the running concierge build (main.versionStr), surfaced on
+	// Version is the running notifyarr build (main.versionStr), surfaced on
 	// /streaming-status.json so Journarr can show it + check for updates.
 	Version string
 
@@ -70,7 +64,6 @@ func New(cfg *config.Config, log *slog.Logger, w *waha.Client, sr *seerr.Client,
 	if cfg.ProwlarrURL != "" && cfg.ProwlarrAPIKey != "" {
 		b.Prowlarr = prowlarr.NewClient(cfg.ProwlarrURL, cfg.ProwlarrAPIKey, cfg.HTTPTimeout)
 	}
-	b.Journarr = journarr.New(cfg.JournarrCallbackURL, cfg.JournarrCallbackToken, log)
 	return b
 }
 

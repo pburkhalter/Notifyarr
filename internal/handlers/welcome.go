@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pburkhalter/waha-concierge/internal/waha"
+	"github.com/pburkhalter/notifyarr/internal/waha"
 )
 
 // sendWelcome posts the standard greeting to chatID, @mentioning the new

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pburkhalter/waha-concierge/internal/seerr"
-	"github.com/pburkhalter/waha-concierge/internal/store"
-	"github.com/pburkhalter/waha-concierge/internal/waha"
+	"github.com/pburkhalter/notifyarr/internal/seerr"
+	"github.com/pburkhalter/notifyarr/internal/store"
+	"github.com/pburkhalter/notifyarr/internal/waha"
 )
 
 // suche runs a TMDB-via-Seerr search and returns the top 3 hits. Results

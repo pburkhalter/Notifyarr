@@ -7,12 +7,12 @@ ARG VERSION=dev
 RUN CGO_ENABLED=0 go build \
     -trimpath \
     -ldflags="-s -w -X main.versionStr=${VERSION}" \
-    -o /out/concierge ./cmd/concierge
+    -o /out/notifyarr ./cmd/notifyarr
 
 FROM gcr.io/distroless/static-debian12:nonroot
-COPY --from=build /out/concierge /concierge
+COPY --from=build /out/notifyarr /notifyarr
 EXPOSE 8080
 USER nonroot
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD ["/concierge", "healthcheck"]
-ENTRYPOINT ["/concierge"]
+    CMD ["/notifyarr", "healthcheck"]
+ENTRYPOINT ["/notifyarr"]

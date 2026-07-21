@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pburkhalter/waha-concierge/internal/waha"
+	"github.com/pburkhalter/notifyarr/internal/waha"
 )
 
 // stats summarises the library state. Per-library counts are pulled from

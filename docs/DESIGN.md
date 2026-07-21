@@ -1,4 +1,4 @@
-# Concierge — Streaming Group Bot
+# Notifyarr — Streaming Group Bot
 
 A small Go service that wires a WhatsApp group (via WAHA) to the homelab
 streaming stack: Jellyseerr, Sonarr, Radarr, Jellyfin, arrarr, TorBox.
@@ -31,7 +31,7 @@ WhatsApp Group ── WAHA NOWEB engine ── HTTP API
               webhooks │ │ outgoing
                        ▼ │
                   ┌──────────────┐
-                  │  concierge   │
+                  │  notifyarr   │
                   ├──────────────┤
                   │ intents      │   parse "@bot suche dune"
                   │ dispatcher   │   route to handler
@@ -141,7 +141,7 @@ when the title is already in the library.
 ## Module layout
 
 ```
-cmd/concierge/main.go     — wiring + signal handling
+cmd/notifyarr/main.go     — wiring + signal handling
 internal/config/          — env parsing, validation
 internal/logger/          — slog wrapper (same style as arrarr)
 internal/store/           — sqlite, schema, polls + welcome + dedup tables
@@ -166,7 +166,7 @@ internal/handlers/        — per-command handlers (help, suche, status, ...)
   cron expressions; otherwise just `time.Ticker` per schedule.
 - Distroless `nonroot` (uid 65532) — but in this deploy run as uid 568 to
   match the apps group (same lesson as arrarr).
-- TrueNAS Custom App, image pulled from `ghcr.io/pburkhalter/concierge`.
+- TrueNAS Custom App, image pulled from `ghcr.io/pburkhalter/notifyarr`.
 
 ## Config (env)
 
@@ -199,7 +199,7 @@ PHONE_MAP_PATRIK         41...
 PHONE_MAP_ADRIAN         41...
 
 LISTEN                   :8080
-DB_PATH                  /data/concierge.db
+DB_PATH                  /data/notifyarr.db
 LOG_LEVEL                info
 LOG_FORMAT               json
 ```

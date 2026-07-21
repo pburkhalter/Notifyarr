@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pburkhalter/waha-concierge/internal/waha"
+	"github.com/pburkhalter/notifyarr/internal/waha"
 )
 
 // neu lists the 10 most recently-added titles in Jellyfin. Movies show

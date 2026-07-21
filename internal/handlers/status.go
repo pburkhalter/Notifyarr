@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pburkhalter/waha-concierge/internal/seerr"
-	"github.com/pburkhalter/waha-concierge/internal/waha"
+	"github.com/pburkhalter/notifyarr/internal/seerr"
+	"github.com/pburkhalter/notifyarr/internal/waha"
 )
 
 // status reports the current Sonarr + Radarr queues. Sonarr items get

@@ -1,4 +1,4 @@
-module github.com/pburkhalter/waha-concierge
+module github.com/pburkhalter/notifyarr
 
 go 1.25.0
 

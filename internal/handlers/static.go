@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/pburkhalter/waha-concierge/internal/waha"
+	"github.com/pburkhalter/notifyarr/internal/waha"
 )
 
 // help is the canonical command listing. Keep it short — WhatsApp users

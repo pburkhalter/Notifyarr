@@ -1,7 +1,7 @@
 services:
-  concierge:
-    image: ghcr.io/pburkhalter/waha-concierge:latest
-    container_name: concierge
+  notifyarr:
+    image: ghcr.io/pburkhalter/notifyarr:latest
+    container_name: notifyarr
     restart: unless-stopped
     user: "568:568"
     ports:
@@ -32,18 +32,13 @@ services:
       JELLYFIN_EXTERNAL_URL: "https://jellyfin.home.pburkhalter.ch"
       SEERR_EXTERNAL_URL:    "https://seerr.home.pburkhalter.ch"
 
-      # Scheduled jobs. Empty disables that job.
-      CRON_WEEKLY_DIGEST: "0 9 * * 0"           # Sun 09:00
-      CRON_WEEKLY_POLL:   "0 19 * * 5"          # Fri 19:00
-      CRON_DAILY_HEALTH:  "0 8 * * *"           # daily 08:00
-
       # @mention map: jellyseerr username (lowercased) → WhatsApp phone (digits).
       PHONE_MAP_PATRIK: "417911122333"
       # PHONE_MAP_ADRIAN: "..."
       # PHONE_MAP_RUBEN:  "..."
 
-      DB_PATH:    "/data/concierge.db"
+      DB_PATH:    "/data/notifyarr.db"
       LOG_LEVEL:  "info"
       LOG_FORMAT: "json"
     volumes:
-      - /mnt/Fast/apps/concierge/data:/data
+      - /mnt/Fast/apps/notifyarr/data:/data

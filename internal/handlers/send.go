@@ -12,7 +12,7 @@ import (
 )
 
 // notifyRequest is the contract Journarr POSTs to /notify/send when it owns
-// completion notifications (NOTIFY_MODE=journarr). Concierge stays the renderer:
+// completion notifications (NOTIFY_MODE=journarr). Notifyarr stays the renderer:
 // it resolves the requester @mention and the Jellyfin deep link from tmdb_id.
 type notifyRequest struct {
 	MediaType string `json:"media_type"` // tv|movie

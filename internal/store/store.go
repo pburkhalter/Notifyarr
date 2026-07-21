@@ -85,19 +85,6 @@ CREATE TABLE IF NOT EXISTS polls (
   title       TEXT NOT NULL,
   PRIMARY KEY (poll_id, option_idx)
 );
-
--- Pending notification buffer. The bot batches Sonarr "episode imported"
--- events: when >=3 episodes of the same series arrive within 10 min, the
--- bot flushes a single grouped message instead of N pings.
-CREATE TABLE IF NOT EXISTS pending_imports (
-  id           INTEGER PRIMARY KEY AUTOINCREMENT,
-  show_key     TEXT NOT NULL,    -- "<series_id>:<season>" or "<movie_tmdb>" for movies
-  display_name TEXT NOT NULL,    -- human-readable, e.g. "Family Guy S20"
-  added_at     DATETIME NOT NULL,
-  flushed_at   DATETIME,
-  payload      TEXT NOT NULL     -- json blob with episode title + s/e + tmdb id
-);
-CREATE INDEX IF NOT EXISTS idx_pending_show ON pending_imports(show_key) WHERE flushed_at IS NULL;
 `
 	_, err := s.db.ExecContext(ctx, schema)
 	return err
@@ -228,84 +215,4 @@ func (s *Store) LookupPoll(ctx context.Context, pollID string, idx int) (*PollOp
 		return nil, err
 	}
 	return o, nil
-}
-
-// ─── pending imports ─────────────────────────────────────────────────────
-
-// EnqueuePendingImport buffers a single episode/movie notification for
-// grouped flushing. PayloadJSON is opaque to the store (the handler
-// serializes whatever fields it'll need at flush time).
-func (s *Store) EnqueuePendingImport(ctx context.Context, showKey, displayName, payloadJSON string) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO pending_imports
-		(show_key, display_name, added_at, payload) VALUES (?, ?, CURRENT_TIMESTAMP, ?)`,
-		showKey, displayName, payloadJSON)
-	return err
-}
-
-// PendingImport is one buffered row.
-type PendingImport struct {
-	ID          int64
-	ShowKey     string
-	DisplayName string
-	AddedAt     time.Time
-	PayloadJSON string
-}
-
-// DueImports returns ALL pending imports for any show that has settled:
-//   - oldest pending row for the show is older than `wait` (long enough that we
-//     should ship something), AND
-//   - newest pending row for the show is older than `quietPeriod` (no fresh
-//     activity, so the season import has probably finished trickling in).
-//
-// The two-condition gate keeps a 22-episode Sonarr import — which lands one
-// row every few minutes — out of N individual messages; we wait until the
-// whole burst is in, then flush them as a single group. Caller flushes each
-// group as one message and then calls MarkFlushed.
-func (s *Store) DueImports(ctx context.Context, wait, quietPeriod time.Duration) (map[string][]PendingImport, error) {
-	matureCutoff := time.Now().UTC().Add(-wait)
-	quietCutoff := time.Now().UTC().Add(-quietPeriod)
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, show_key, display_name, added_at, payload
-		FROM pending_imports
-		WHERE flushed_at IS NULL
-		  AND show_key IN (
-		      SELECT show_key FROM pending_imports
-		      WHERE flushed_at IS NULL
-		      GROUP BY show_key
-		      HAVING MIN(added_at) <= ? AND MAX(added_at) <= ?
-		  )
-		ORDER BY show_key, added_at ASC`, matureCutoff, quietCutoff)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := map[string][]PendingImport{}
-	for rows.Next() {
-		p := PendingImport{}
-		if err := rows.Scan(&p.ID, &p.ShowKey, &p.DisplayName, &p.AddedAt, &p.PayloadJSON); err != nil {
-			return nil, err
-		}
-		out[p.ShowKey] = append(out[p.ShowKey], p)
-	}
-	return out, rows.Err()
-}
-
-// MarkFlushed clears a batch of pending imports after the bot posted the
-// grouped message.
-func (s *Store) MarkFlushed(ctx context.Context, ids []int64) error {
-	if len(ids) == 0 {
-		return nil
-	}
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-	for _, id := range ids {
-		if _, err := tx.ExecContext(ctx,
-			`UPDATE pending_imports SET flushed_at = CURRENT_TIMESTAMP WHERE id = ?`, id); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
 }

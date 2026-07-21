@@ -120,7 +120,7 @@ func Parse(body string, mentionTokens []string, mentionedSelf bool) Command {
 	case matchedToken != "":
 		rest = strings.TrimSpace(t[len(matchedToken):])
 	case strings.HasPrefix(t, "@"):
-		// Strip the leading "@<token>" — could be "@Bot", "@Concierge",
+		// Strip the leading "@<token>" — could be "@Bot", "@Notifyarr",
 		// "@~Bot", etc. The token ends at the first whitespace.
 		_, after := splitVerb(t)
 		rest = strings.TrimSpace(after)

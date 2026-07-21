@@ -66,11 +66,6 @@ type Config struct {
 	JellyfinExternalURL string
 	SeerrExternalURL    string
 
-	// Cron expressions; empty disables that job.
-	CronWeeklyDigest string
-	CronWeeklyPoll   string
-	CronDailyHealth  string
-
 	// PhoneMap maps a Jellyseerr username (lowercased) to a WhatsApp phone
 	// (digits only). Populated from every env var prefixed PHONE_MAP_, so
 	// adding a user is one new env var, not a code change.
@@ -86,19 +81,12 @@ type Config struct {
 	// HTTPTimeout caps every outbound API call.
 	HTTPTimeout time.Duration
 
-	// Journarr flow-tracker callback (optional). When set, the concierge
-	// POSTs a "notification.sent" event after each delivered WhatsApp
-	// notification so Journarr can mark items 'notified'. Empty URL disables.
-	JournarrCallbackURL   string
-	JournarrCallbackToken string
-
-	// WAHASendImages controls whether the flush worker attempts SendImage
+	// WAHASendImages controls whether the notify path attempts SendImage
 	// at all. WAHA Core on the NOWEB engine returns 422 for that endpoint,
-	// so on a Core deployment every grouped Sonarr push wastes one HTTP
-	// round-trip to WAHA, eats a warn-log line, then falls back to text.
-	// Set false (the default) to skip the image path entirely and go
-	// straight to SendText. Flip to true once WAHA is upgraded to Plus or
-	// switched to WEBJS.
+	// so on a Core deployment every poster push wastes one HTTP round-trip
+	// to WAHA, eats a warn-log line, then falls back to text. Set false (the
+	// default) to skip the image path entirely and go straight to SendText.
+	// Flip to true once WAHA is upgraded to Plus or switched to WEBJS.
 	WAHASendImages bool
 
 	// NotifyMode = "direct" (default): Sonarr/Radarr Connect webhooks drive the
@@ -106,7 +94,7 @@ type Config struct {
 	// /notify/send, and the direct arr webhooks are ignored (no double-send).
 	NotifyMode string
 	// NotifySendToken guards POST /notify/send (must match Journarr's
-	// CONCIERGE_API_KEY). Empty ⇒ the endpoint rejects everything.
+	// NOTIFYARR_API_KEY). Empty ⇒ the endpoint rejects everything.
 	NotifySendToken string
 }
 
@@ -150,17 +138,12 @@ func Load(environ []string) (*Config, error) {
 		JellyfinSeriesLibraryID: get("JELLYFIN_SERIES_LIBRARY_ID"),
 		JellyfinExternalURL:     strings.TrimRight(get("JELLYFIN_EXTERNAL_URL"), "/"),
 		SeerrExternalURL:        strings.TrimRight(get("SEERR_EXTERNAL_URL"), "/"),
-		CronWeeklyDigest:        defaulted(get, "CRON_WEEKLY_DIGEST", "0 9 * * 0"),
-		CronWeeklyPoll:          defaulted(get, "CRON_WEEKLY_POLL", "0 19 * * 5"),
-		CronDailyHealth:         defaulted(get, "CRON_DAILY_HEALTH", "0 8 * * *"),
 		PhoneMap:                phoneMapFrom(envMap),
-		DBPath:                  defaulted(get, "DB_PATH", "/data/concierge.db"),
+		DBPath:                  defaulted(get, "DB_PATH", "/data/notifyarr.db"),
 		LogLevel:                defaulted(get, "LOG_LEVEL", "info"),
 		LogFormat:               defaulted(get, "LOG_FORMAT", "json"),
 		HTTPTimeout:             parseDuration(get("HTTP_TIMEOUT"), 30*time.Second),
 		WAHASendImages:          parseBool(get("WAHA_SEND_IMAGES"), false),
-		JournarrCallbackURL:     strings.TrimRight(get("JOURNARR_CALLBACK_URL"), "/"),
-		JournarrCallbackToken:   get("JOURNARR_CALLBACK_TOKEN"),
 		NotifyMode:              defaulted(get, "NOTIFY_MODE", "direct"),
 		NotifySendToken:         get("NOTIFY_SEND_TOKEN"),
 	}

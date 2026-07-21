@@ -1,4 +1,4 @@
-# waha-concierge
+# notifyarr
 
 WhatsApp bot for the homelab streaming group. Wires [WAHA](https://waha.devlike.pro)
 to Jellyseerr, Sonarr, Radarr, and Jellyfin so the group gets:
@@ -74,19 +74,19 @@ Four inbound surfaces, all on port 8080:
 | `/healthz` | Container healthcheck |
 
 The Sonarr + Radarr custom-script notifications that posted directly to
-WAHA can be removed once those webhooks are pointed at concierge — concierge
+WAHA can be removed once those webhooks are pointed at notifyarr — notifyarr
 takes over notification formatting, batching, and @-mentions.
 
 ## Build & deploy
 
 ```sh
 go test ./...
-go build ./cmd/concierge
-docker build -f deploy/Dockerfile -t waha-concierge .
+go build ./cmd/notifyarr
+docker build -f deploy/Dockerfile -t notifyarr .
 ```
 
 Tagged pushes (`vX.Y.Z`) trigger the release workflow to publish
-`ghcr.io/pburkhalter/waha-concierge`.
+`ghcr.io/pburkhalter/notifyarr`.
 
 ## License
 
