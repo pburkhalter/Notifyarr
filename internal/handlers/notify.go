@@ -50,16 +50,3 @@ func (b *Bot) requesterMention(ctx context.Context, tmdbID int) (text string, ji
 	}
 	return "@" + phone, waha.FormatJID(phone)
 }
-
-// pickPoster returns the first image URL of the requested coverType, or "".
-func pickPoster(images []struct {
-	RemoteURL string `json:"remoteUrl"`
-	Type      string `json:"coverType"`
-}, want string) string {
-	for _, im := range images {
-		if strings.EqualFold(im.Type, want) {
-			return im.RemoteURL
-		}
-	}
-	return ""
-}

@@ -185,25 +185,6 @@ func truncate(s string, n int) string {
 	return s[:n] + "…"
 }
 
-// fmtBytes turns 4_294_967_296 into "4.0 GB".
-func fmtBytes(n int64) string {
-	const u = 1024
-	if n < u {
-		return strconv.FormatInt(n, 10) + " B"
-	}
-	div, exp := int64(u), 0
-	for nn := n / u; nn >= u; nn /= u {
-		div *= u
-		exp++
-	}
-	unit := "KMGTPE"[exp : exp+1]
-	return fmtFloat(float64(n)/float64(div), 1) + " " + unit + "B"
-}
-
-func fmtFloat(f float64, dec int) string {
-	return strconv.FormatFloat(f, 'f', dec, 64)
-}
-
 // fmtPercent computes "(size-left / size)" inverted as a 0..100 progress
 // string like "73%". Returns "" when size is zero (unknown).
 func fmtPercent(size, sizeLeft int64) string {
