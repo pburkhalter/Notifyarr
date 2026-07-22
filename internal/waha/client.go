@@ -53,14 +53,6 @@ func (e *APIError) Retryable() bool {
 	return e.Status == 429 || e.Status >= 500
 }
 
-func IsRetryable(err error) bool {
-	var apiErr *APIError
-	if errors.As(err, &apiErr) {
-		return apiErr.Retryable()
-	}
-	return err != nil
-}
-
 // sentMessage is the subset of WAHA's send-* response we care about. The
 // real payload has dozens of WhatsApp-internal fields; we only need the id
 // because callers track replies/reactions by it (and pollId == messageId).

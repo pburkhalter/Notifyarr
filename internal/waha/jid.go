@@ -9,7 +9,6 @@ import "strings"
 const (
 	suffixContact = "@c.us"
 	suffixSignal  = "@s.whatsapp.net"
-	suffixGroup   = "@g.us"
 )
 
 // ParsePhoneFromJID returns the digits before "@c.us" / "@s.whatsapp.net".
@@ -21,22 +20,6 @@ func ParsePhoneFromJID(jid string) string {
 		}
 	}
 	return ""
-}
-
-func IsGroup(jid string) bool {
-	return strings.HasSuffix(jid, suffixGroup)
-}
-
-// FormatMention returns "@<phone>" — the literal token to put inside
-// SendText's `text` for WhatsApp to render as a ping when the same jid
-// appears in the `mentions` slice. Returns "" for non-personal jids so
-// callers can skip silently rather than render garbage.
-func FormatMention(jid string) string {
-	phone := ParsePhoneFromJID(jid)
-	if phone == "" {
-		return ""
-	}
-	return "@" + phone
 }
 
 // FormatJID turns a digits-only phone number into a WAHA-style personal

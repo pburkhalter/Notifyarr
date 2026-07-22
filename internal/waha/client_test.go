@@ -272,19 +272,6 @@ func TestNon2xxReturnsAPIError(t *testing.T) {
 	}
 }
 
-func TestAPIError5xxIsRetryable(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusBadGateway)
-		_, _ = io.WriteString(w, "upstream down")
-	}))
-	defer srv.Close()
-	c := NewClient(srv.URL, "k", "default", 5*time.Second)
-	_, err := c.SendText(context.Background(), "x@c.us", "y", nil)
-	if !IsRetryable(err) {
-		t.Errorf("502 must be retryable; err=%v", err)
-	}
-}
-
 func TestErrorBodyTruncatedTo200Chars(t *testing.T) {
 	long := strings.Repeat("a", 500)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
