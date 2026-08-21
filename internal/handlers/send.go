@@ -61,22 +61,49 @@ func (b *Bot) sendNotification(ctx context.Context, n notifyRequest) (string, er
 	}
 	link := b.jellyfinLink(ctx, n.TmdbID, n.MediaType)
 
+	// Qualität der importierten Datei — bei mehreren Folgen stellvertretend die
+	// erste, sie stammen aus demselben Grab und teilen die Qualität.
+	var q qualityInfo
+	if n.MediaType == "tv" && len(n.Episodes) > 0 {
+		q = b.lookupQuality(ctx, n.MediaType, n.TmdbID, n.Episodes[0].Season, n.Episodes[0].Episode)
+	} else {
+		q = b.lookupQuality(ctx, n.MediaType, n.TmdbID, 0, 0)
+	}
+
 	var body strings.Builder
 	if n.MediaType == "tv" && len(n.Episodes) > 0 {
-		fmt.Fprintf(&body, "✅ *%s* — %d new episode%s", n.Title, len(n.Episodes), plural(len(n.Episodes)))
-		for _, e := range n.Episodes {
+		if len(n.Episodes) == 1 {
+			e := n.Episodes[0]
 			t := ""
 			if e.Title != "" {
-				t = " — " + e.Title
+				t = " — „" + e.Title + "“"
 			}
-			fmt.Fprintf(&body, "\n• S%02dE%02d%s", e.Season, e.Episode, t)
+			fmt.Fprintf(&body, "📺 *%s* · S%02dE%02d%s", n.Title, e.Season, e.Episode, t)
+		} else {
+			fmt.Fprintf(&body, "📺 *%s* — %d neue Folgen", n.Title, len(n.Episodes))
+			for _, e := range n.Episodes {
+				t := ""
+				if e.Title != "" {
+					t = " — " + e.Title
+				}
+				fmt.Fprintf(&body, "\n• S%02dE%02d%s", e.Season, e.Episode, t)
+			}
 		}
 	} else {
 		title := n.Title
 		if n.Year > 0 {
 			title = fmt.Sprintf("%s (%d)", title, n.Year)
 		}
-		fmt.Fprintf(&body, "✅ *%s* is now available", title)
+		fmt.Fprintf(&body, "🎬 *%s* ist da", title)
+	}
+	if q.Available {
+		fmt.Fprintf(&body, "\nQualität: *%s*", q.Tier)
+		if q.Detail != "" {
+			fmt.Fprintf(&body, " · %s", q.Detail)
+		}
+		if q.Limited {
+			body.WriteString("\nWird automatisch ersetzt, sobald eine bessere Fassung erscheint")
+		}
 	}
 	if link != "" {
 		body.WriteString("\n" + link)

@@ -160,3 +160,57 @@ func truncate(s string, n int) string {
 	}
 	return s[:n] + "…"
 }
+
+// ─── Qualität einer importierten Datei ────────────────────────────────────
+
+// FileQuality beschreibt die Datei, die am Ende in der Bibliothek liegt —
+// genug, um daraus eine laienverständliche Qualitätsstufe abzuleiten.
+type FileQuality struct {
+	QualityName   string   // z.B. "WEBDL-1080p"
+	CustomFormats []string // z.B. ["German DL", "Line Dubbed"]
+	Languages     []string
+}
+
+type movieFile struct {
+	Quality struct {
+		Quality struct {
+			Name string `json:"name"`
+		} `json:"quality"`
+	} `json:"quality"`
+	CustomFormats []struct {
+		Name string `json:"name"`
+	} `json:"customFormats"`
+	Languages []struct {
+		Name string `json:"name"`
+	} `json:"languages"`
+}
+
+type movie struct {
+	ID        int       `json:"id"`
+	TmdbID    int       `json:"tmdbId"`
+	HasFile   bool      `json:"hasFile"`
+	MovieFile movieFile `json:"movieFile"`
+}
+
+// QualityByTMDB liefert die Qualität der importierten Datei zu einer TMDB-Id.
+// Radarr filtert /movie direkt nach tmdbId, ein Treffer genügt also.
+func (c *Client) QualityByTMDB(ctx context.Context, tmdbID int) (*FileQuality, error) {
+	var ms []movie
+	if err := c.get(ctx, "/movie?tmdbId="+strconv.Itoa(tmdbID), &ms); err != nil {
+		return nil, err
+	}
+	for _, m := range ms {
+		if !m.HasFile {
+			continue
+		}
+		q := &FileQuality{QualityName: m.MovieFile.Quality.Quality.Name}
+		for _, cf := range m.MovieFile.CustomFormats {
+			q.CustomFormats = append(q.CustomFormats, cf.Name)
+		}
+		for _, l := range m.MovieFile.Languages {
+			q.Languages = append(q.Languages, l.Name)
+		}
+		return q, nil
+	}
+	return nil, nil // kein importiertes File — Aufrufer laesst die Angabe weg
+}

@@ -171,3 +171,77 @@ func truncate(s string, n int) string {
 	}
 	return s[:n] + "…"
 }
+
+// ─── Qualität einer importierten Folge ────────────────────────────────────
+
+// FileQuality beschreibt die importierte Episodendatei — genug, um daraus eine
+// laienverständliche Qualitätsstufe abzuleiten.
+type FileQuality struct {
+	QualityName   string
+	CustomFormats []string
+	Languages     []string
+}
+
+type episodeFile struct {
+	Quality struct {
+		Quality struct {
+			Name string `json:"name"`
+		} `json:"quality"`
+	} `json:"quality"`
+	CustomFormats []struct {
+		Name string `json:"name"`
+	} `json:"customFormats"`
+	Languages []struct {
+		Name string `json:"name"`
+	} `json:"languages"`
+}
+
+type episode struct {
+	SeasonNumber  int         `json:"seasonNumber"`
+	EpisodeNumber int         `json:"episodeNumber"`
+	HasFile       bool        `json:"hasFile"`
+	EpisodeFile   episodeFile `json:"episodeFile"`
+}
+
+type series struct {
+	ID     int `json:"id"`
+	TmdbID int `json:"tmdbId"`
+}
+
+// QualityByTMDB liefert die Qualität einer konkreten Folge zu einer TMDB-Id.
+// Sonarr kennt keinen tmdbId-Filter auf /series, deshalb wird clientseitig
+// gesucht — bei der Grössenordnung einer Heim-Bibliothek unkritisch.
+func (c *Client) QualityByTMDB(ctx context.Context, tmdbID, season, epNum int) (*FileQuality, error) {
+	var all []series
+	if err := c.get(ctx, "/series", &all); err != nil {
+		return nil, err
+	}
+	seriesID := 0
+	for _, s := range all {
+		if s.TmdbID == tmdbID {
+			seriesID = s.ID
+			break
+		}
+	}
+	if seriesID == 0 {
+		return nil, nil
+	}
+	var eps []episode
+	if err := c.get(ctx, fmt.Sprintf("/episode?seriesId=%d&seasonNumber=%d&includeEpisodeFile=true", seriesID, season), &eps); err != nil {
+		return nil, err
+	}
+	for _, e := range eps {
+		if e.EpisodeNumber != epNum || !e.HasFile {
+			continue
+		}
+		q := &FileQuality{QualityName: e.EpisodeFile.Quality.Quality.Name}
+		for _, cf := range e.EpisodeFile.CustomFormats {
+			q.CustomFormats = append(q.CustomFormats, cf.Name)
+		}
+		for _, l := range e.EpisodeFile.Languages {
+			q.Languages = append(q.Languages, l.Name)
+		}
+		return q, nil
+	}
+	return nil, nil
+}
