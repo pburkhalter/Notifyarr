@@ -11,6 +11,7 @@ func TestClassify(t *testing.T) {
 		wantTier    string
 		wantLimited bool
 		wantDetail  string
+		scene       string
 	}{
 		{
 			name:    "deutsche 1080p WEB-DL ist die Normalerwartung",
@@ -50,7 +51,7 @@ func TestClassify(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := classify(c.quality, c.formats, c.languages)
+			got := classify(c.quality, c.formats, c.languages, c.scene)
 			if c.quality == "" {
 				if got.Available {
 					t.Fatalf("ohne Qualitaet darf nichts ausgegeben werden, bekam %+v", got)
@@ -75,11 +76,50 @@ func TestClassify(t *testing.T) {
 
 // Englische Releases sollen nicht faelschlich als deutsch beschrieben werden.
 func TestClassifyNonGerman(t *testing.T) {
-	got := classify("Bluray-1080p", nil, []string{"English"})
+	got := classify("Bluray-1080p", nil, []string{"English"}, "")
 	if got.Tier != tierHigh {
 		t.Errorf("Tier = %q", got.Tier)
 	}
 	if got.Detail != "1080p · Bluray · English" {
 		t.Errorf("Detail = %q", got.Detail)
+	}
+}
+
+// Radarr liefert customFormats im eingebetteten movieFile LEER — die Erkennung
+// darf deshalb nicht allein davon abhaengen. Der Release-Name ueberlebt das
+// Umbenennen und traegt das LD-Kuerzel weiter. Realfall Backrooms, 2026-08-23:
+// die Datei heisst "Backrooms (2026) WEBDL-1080p.mkv", der sceneName aber
+// "Backrooms.2026.German.5.1.LD.DL.1080p.WEB.h264-LiNEUP".
+func TestClassifyFallsBackToSceneName(t *testing.T) {
+	got := classify("WEBDL-1080p", nil, []string{"German", "English"},
+		"Backrooms.2026.German.5.1.LD.DL.1080p.WEB.h264-LiNEUP")
+	if got.Tier != tierLimited {
+		t.Errorf("Tier = %q, erwartet %q", got.Tier, tierLimited)
+	}
+	if !got.Limited {
+		t.Error("Limited muss gesetzt sein, damit der Ersetzungs-Hinweis erscheint")
+	}
+}
+
+// "DL" (Dual Language) darf NICHT als Line-Dub durchgehen — sonst waere fast
+// jedes deutsche Release faelschlich eingeschraenkt.
+func TestClassifyDoesNotConfuseDLWithLD(t *testing.T) {
+	got := classify("WEBDL-1080p", []string{"German DL"}, []string{"German"},
+		"Toy.Story.5.2026.German.DL.1080p.WEB.h264-WvF")
+	if got.Tier != tierHigh {
+		t.Errorf("Tier = %q, erwartet %q — DL ist kein Line-Dub", got.Tier, tierHigh)
+	}
+	if got.Limited {
+		t.Error("Limited darf bei regulaerem German DL nicht gesetzt sein")
+	}
+}
+
+// Mic-Dub bleibt gesperrt, wird aber falls doch importiert als eingeschraenkt
+// gemeldet.
+func TestClassifyDetectsMicDubInSceneName(t *testing.T) {
+	got := classify("WEBDL-1080p", nil, []string{"German"},
+		"Irgendwas.2026.German.MD.1080p.WEB.h264-XY")
+	if got.Tier != tierLimited {
+		t.Errorf("Tier = %q, erwartet %q", got.Tier, tierLimited)
 	}
 }

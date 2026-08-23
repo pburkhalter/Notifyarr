@@ -169,9 +169,12 @@ type FileQuality struct {
 	QualityName   string   // z.B. "WEBDL-1080p"
 	CustomFormats []string // z.B. ["German DL", "Line Dubbed"]
 	Languages     []string
+	SceneName     string // urspruenglicher Release-Name, ueberlebt das Umbenennen
 }
 
 type movieFile struct {
+	ID      int `json:"id"`
+	MovieID int `json:"movieId"`
 	Quality struct {
 		Quality struct {
 			Name string `json:"name"`
@@ -183,17 +186,22 @@ type movieFile struct {
 	Languages []struct {
 		Name string `json:"name"`
 	} `json:"languages"`
+	SceneName string `json:"sceneName"`
 }
 
 type movie struct {
-	ID        int       `json:"id"`
-	TmdbID    int       `json:"tmdbId"`
-	HasFile   bool      `json:"hasFile"`
-	MovieFile movieFile `json:"movieFile"`
+	ID      int  `json:"id"`
+	TmdbID  int  `json:"tmdbId"`
+	HasFile bool `json:"hasFile"`
 }
 
 // QualityByTMDB liefert die Qualität der importierten Datei zu einer TMDB-Id.
-// Radarr filtert /movie direkt nach tmdbId, ein Treffer genügt also.
+//
+// Zwei Aufrufe, und das mit Absicht: das in /movie eingebettete movieFile
+// liefert customFormats LEER (verifiziert 2026-08-23 an Backrooms — dort steckt
+// "Line Dubbed" drin, kam aber nicht mit). Nur /moviefile?movieId= fuellt sie.
+// Ohne den zweiten Aufruf wuerde eine Line-Dub-Fassung als "hoch" statt
+// "eingeschränkt" gemeldet. Sonarr hat das Problem nicht.
 func (c *Client) QualityByTMDB(ctx context.Context, tmdbID int) (*FileQuality, error) {
 	var ms []movie
 	if err := c.get(ctx, "/movie?tmdbId="+strconv.Itoa(tmdbID), &ms); err != nil {
@@ -203,11 +211,19 @@ func (c *Client) QualityByTMDB(ctx context.Context, tmdbID int) (*FileQuality, e
 		if !m.HasFile {
 			continue
 		}
-		q := &FileQuality{QualityName: m.MovieFile.Quality.Quality.Name}
-		for _, cf := range m.MovieFile.CustomFormats {
+		var files []movieFile
+		if err := c.get(ctx, "/moviefile?movieId="+strconv.Itoa(m.ID), &files); err != nil {
+			return nil, err
+		}
+		if len(files) == 0 {
+			return nil, nil
+		}
+		f := files[0]
+		q := &FileQuality{QualityName: f.Quality.Quality.Name, SceneName: f.SceneName}
+		for _, cf := range f.CustomFormats {
 			q.CustomFormats = append(q.CustomFormats, cf.Name)
 		}
-		for _, l := range m.MovieFile.Languages {
+		for _, l := range f.Languages {
 			q.Languages = append(q.Languages, l.Name)
 		}
 		return q, nil

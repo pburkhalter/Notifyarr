@@ -180,6 +180,7 @@ type FileQuality struct {
 	QualityName   string
 	CustomFormats []string
 	Languages     []string
+	SceneName     string // urspruenglicher Release-Name, ueberlebt das Umbenennen
 }
 
 type episodeFile struct {
@@ -194,6 +195,7 @@ type episodeFile struct {
 	Languages []struct {
 		Name string `json:"name"`
 	} `json:"languages"`
+	SceneName string `json:"sceneName"`
 }
 
 type episode struct {
@@ -234,7 +236,7 @@ func (c *Client) QualityByTMDB(ctx context.Context, tmdbID, season, epNum int) (
 		if e.EpisodeNumber != epNum || !e.HasFile {
 			continue
 		}
-		q := &FileQuality{QualityName: e.EpisodeFile.Quality.Quality.Name}
+		q := &FileQuality{QualityName: e.EpisodeFile.Quality.Quality.Name, SceneName: e.EpisodeFile.SceneName}
 		for _, cf := range e.EpisodeFile.CustomFormats {
 			q.CustomFormats = append(q.CustomFormats, cf.Name)
 		}

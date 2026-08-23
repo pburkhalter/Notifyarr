@@ -2,8 +2,13 @@ package handlers
 
 import (
 	"context"
+	"regexp"
 	"strings"
 )
+
+// Dieselben Kuerzel, die Radarr/Sonarr in den Custom Formats "Line Dubbed"
+// und "Mic Dubbed" verwenden.
+var dubMarker = regexp.MustCompile(`(?i)\b(LD|AC3LD|MD|AC3MD|Line[ .-]?Dubbed|Mic[ .-]?Dubbed)\b`)
 
 // Qualitätsstufen für die WhatsApp-Nachricht. Bewusst drei Stufen in
 // Alltagssprache statt Release-Jargon — Empfänger sind keine Admins.
@@ -27,7 +32,7 @@ type qualityInfo struct {
 }
 
 // classify uebersetzt Radarr-/Sonarr-Rohwerte in eine Stufe plus Kurzdetail.
-func classify(qualityName string, customFormats, languages []string) qualityInfo {
+func classify(qualityName string, customFormats, languages []string, sceneName string) qualityInfo {
 	if qualityName == "" {
 		return qualityInfo{}
 	}
@@ -39,6 +44,11 @@ func classify(qualityName string, customFormats, languages []string) qualityInfo
 		case "line dubbed", "line/mic dubbed", "mic dubbed":
 			lineDub = true
 		}
+	}
+	// Netz fuer den Fall, dass die Formate fehlen: der Release-Name ueberlebt
+	// das Umbenennen in sceneName, und dort steht das LD/MD-Kuerzel noch drin.
+	if !lineDub && sceneName != "" {
+		lineDub = dubMarker.MatchString(sceneName)
 	}
 
 	// Auflösung -> Grundstufe
@@ -120,7 +130,7 @@ func (b *Bot) lookupQuality(ctx context.Context, mediaType string, tmdbID, seaso
 		if err != nil || q == nil {
 			return qualityInfo{}
 		}
-		return classify(q.QualityName, q.CustomFormats, q.Languages)
+		return classify(q.QualityName, q.CustomFormats, q.Languages, q.SceneName)
 	}
 	if b.Radarr == nil {
 		return qualityInfo{}
@@ -129,5 +139,5 @@ func (b *Bot) lookupQuality(ctx context.Context, mediaType string, tmdbID, seaso
 	if err != nil || q == nil {
 		return qualityInfo{}
 	}
-	return classify(q.QualityName, q.CustomFormats, q.Languages)
+	return classify(q.QualityName, q.CustomFormats, q.Languages, q.SceneName)
 }
