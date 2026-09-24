@@ -1,11 +1,8 @@
 module github.com/pburkhalter/notifyarr
 
-go 1.25.0
+go 1.26.0
 
-require (
-	github.com/robfig/cron/v3 v3.0.1
-	modernc.org/sqlite v1.52.0
-)
+require modernc.org/sqlite v1.52.0
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
