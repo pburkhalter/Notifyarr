@@ -52,7 +52,7 @@ func classify(qualityName string, customFormats, languages []string, sceneName s
 	}
 
 	// Auflösung -> Grundstufe
-	tier := tierHigh
+	var tier string
 	res := ""
 	switch {
 	case strings.Contains(q, "2160") || strings.Contains(q, "4k"):

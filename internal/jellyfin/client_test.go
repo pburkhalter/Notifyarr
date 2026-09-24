@@ -22,7 +22,7 @@ func TestRecentlyAdded(t *testing.T) {
 		if !strings.HasPrefix(r.URL.Path, "/Users/u1/Items") {
 			t.Fatalf("path %s", r.URL.Path)
 		}
-		w.Write([]byte(`{"Items":[{"Id":"abc","Name":"Pilot","Type":"Episode","SeriesName":"Show","ProductionYear":2024}]}`))
+		_, _ = w.Write([]byte(`{"Items":[{"Id":"abc","Name":"Pilot","Type":"Episode","SeriesName":"Show","ProductionYear":2024}]}`))
 	})
 	got, err := c.RecentlyAdded(context.Background(), 3)
 	if err != nil || len(got) != 1 || got[0].SeriesName != "Show" || !strings.Contains(got[0].PosterURL, "/Items/abc/Images/Primary") {
@@ -35,7 +35,7 @@ func TestCounts(t *testing.T) {
 		if r.URL.Path != "/Items/Counts" {
 			t.Fatalf("path %s", r.URL.Path)
 		}
-		w.Write([]byte(`{"MovieCount":10,"SeriesCount":5,"EpisodeCount":120}`))
+		_, _ = w.Write([]byte(`{"MovieCount":10,"SeriesCount":5,"EpisodeCount":120}`))
 	})
 	got, err := c.Counts(context.Background())
 	if err != nil || got.Movie != 10 || got.Series != 5 || got.Episode != 120 {
@@ -54,7 +54,7 @@ func TestPosterURL(t *testing.T) {
 func TestAPIError(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(403)
-		w.Write([]byte(`denied`))
+		_, _ = w.Write([]byte(`denied`))
 	})
 	_, err := c.Counts(context.Background())
 	var apiErr *APIError
