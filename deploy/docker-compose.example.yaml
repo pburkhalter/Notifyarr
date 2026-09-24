@@ -16,6 +16,11 @@ services:
       WAHA_SESSION: "default"
       WAHA_CHAT_ID: "1203REPLACEME@g.us"        # group jid
       WAHA_BOT_PHONE: "+41 79 111 22 33"        # bot's own number
+      WAHA_WEBHOOK_HMAC_KEY: "REPLACEME"        # = WAHA's WHATSAPP_HOOK_HMAC_KEY; unset ⇒ bot off
+
+      # Journarr-owned completion notices (POST /notify/send).
+      NOTIFY_MODE: "journarr"
+      NOTIFY_SEND_TOKEN: "REPLACEME"            # = Journarr's NOTIFYARR_API_KEY
 
       # Upstream APIs.
       SEERR_URL: "http://192.168.0.203:5055"

@@ -67,8 +67,31 @@ func New(cfg *config.Config, log *slog.Logger, w *waha.Client, sr *seerr.Client,
 	return b
 }
 
+// allowedChat restricts bot commands to the configured group and to direct
+// chats from phones in the PHONE_MAP (the household). Anything else — a
+// stranger writing to the bot number, a foreign group the number sits in —
+// is dropped before the intent parser runs. Every command ends up as a Seerr
+// request under the service's api key, so the sender must be someone known.
+func (b *Bot) allowedChat(ev waha.MessageEvent) bool {
+	if ev.From == b.Cfg.WAHAChatID {
+		return true
+	}
+	if digits, ok := strings.CutSuffix(ev.From, "@c.us"); ok {
+		for _, phone := range b.Cfg.PhoneMap {
+			if phone == digits {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // OnMessage routes inbound messages through the intents parser.
 func (b *Bot) OnMessage(ctx context.Context, ev waha.MessageEvent) error {
+	if !b.allowedChat(ev) {
+		b.Log.Info("message from unknown chat ignored", "chat", ev.From, "sender", ev.Participant)
+		return nil
+	}
 	selfJID := waha.FormatJID(b.Cfg.WAHABotPhone)
 	selfLID := b.Cfg.WAHABotLID + "@lid"
 	mentionedSelf := false
@@ -120,6 +143,10 @@ func (b *Bot) OnMessage(ctx context.Context, ev waha.MessageEvent) error {
 // OnGroupJoin fires the welcome message (unless we already greeted this
 // user within WelcomeCooldown).
 func (b *Bot) OnGroupJoin(ctx context.Context, ev waha.GroupJoinEvent) error {
+	if ev.ID != b.Cfg.WAHAChatID {
+		b.Log.Info("join in unknown chat ignored", "chat", ev.ID)
+		return nil
+	}
 	for _, p := range ev.Participants {
 		ok, err := b.Store.MarkWelcomed(ctx, ev.ID, p.ID, b.WelcomeCooldown)
 		if err != nil {

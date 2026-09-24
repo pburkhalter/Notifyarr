@@ -96,6 +96,12 @@ type Config struct {
 	// NotifySendToken guards POST /notify/send (must match Journarr's
 	// NOTIFYARR_API_KEY). Empty ⇒ the endpoint rejects everything.
 	NotifySendToken string
+
+	// WAHAWebhookHMACKey must equal WAHA's WHATSAPP_HOOK_HMAC_KEY; the
+	// receiver verifies X-Webhook-Hmac on every event. Empty ⇒ /waha-webhook
+	// answers 503 (the bot is off) unless WAHAWebhookInsecure is set.
+	WAHAWebhookHMACKey  string
+	WAHAWebhookInsecure bool
 }
 
 // LoadFromOS parses os.Environ(). Use in main.
@@ -146,6 +152,8 @@ func Load(environ []string) (*Config, error) {
 		WAHASendImages:          parseBool(get("WAHA_SEND_IMAGES"), false),
 		NotifyMode:              defaulted(get, "NOTIFY_MODE", "direct"),
 		NotifySendToken:         get("NOTIFY_SEND_TOKEN"),
+		WAHAWebhookHMACKey:      get("WAHA_WEBHOOK_HMAC_KEY"),
+		WAHAWebhookInsecure:     parseBool(get("WAHA_WEBHOOK_INSECURE"), false),
 	}
 	if err := c.Validate(); err != nil {
 		return nil, err

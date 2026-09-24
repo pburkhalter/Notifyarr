@@ -51,6 +51,20 @@ JELLYFIN_URL + JELLYFIN_API_KEY + JELLYFIN_USER_ID
 JELLYFIN_EXTERNAL_URL + SEERR_EXTERNAL_URL
 ```
 
+Security-relevant, both required in practice:
+
+```
+WAHA_WEBHOOK_HMAC_KEY   must equal WAHA's WHATSAPP_HOOK_HMAC_KEY; every event on
+                        /waha-webhook is verified (X-Webhook-Hmac, sha512). Unset ⇒
+                        the endpoint answers 503 and the bot is off. Only
+                        WAHA_WEBHOOK_INSECURE=true accepts unsigned events.
+NOTIFY_SEND_TOKEN       shared secret Journarr sends as X-Notify-Token on /notify/send
+                        (NOTIFY_MODE=journarr requires it).
+```
+
+Bot commands are accepted only from `WAHA_CHAT_ID` and from direct chats of
+phones listed in `PHONE_MAP_*`; anything else is logged and ignored.
+
 Per-user phone mapping uses prefixed env vars so adding a user is one
 line of compose:
 
@@ -68,14 +82,13 @@ Four inbound surfaces, all on port 8080:
 
 | Path | Source |
 |---|---|
-| `/waha-webhook` | WAHA — incoming WhatsApp messages, group joins, poll votes |
-| `/webhook/sonarr` | Sonarr "Connect → Webhook" |
-| `/webhook/radarr` | Radarr "Connect → Webhook" |
+| `/waha-webhook` | WAHA — incoming WhatsApp messages, group joins, poll votes (HMAC-signed, see above) |
+| `/notify/send` | Journarr — completion notices to render and relay to WhatsApp (`X-Notify-Token`; an `X-Idempotency-Key` makes a retried delivery return the message already sent) |
+| `/streaming-status.json` | Journarr health poller — issues, WAHA session state, grab quota |
 | `/healthz` | Container healthcheck |
 
-The Sonarr + Radarr custom-script notifications that posted directly to
-WAHA can be removed once those webhooks are pointed at notifyarr — notifyarr
-takes over notification formatting, batching, and @-mentions.
+Sonarr/Radarr do not talk to notifyarr directly any more: Journarr owns the
+completion notices (grouping per request, @-mentions resolved here).
 
 ## Build & deploy
 

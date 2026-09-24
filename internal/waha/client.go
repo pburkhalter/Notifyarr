@@ -53,17 +53,6 @@ func (e *APIError) Retryable() bool {
 	return e.Status == 429 || e.Status >= 500
 }
 
-// sentMessage is the subset of WAHA's send-* response we care about. The
-// real payload has dozens of WhatsApp-internal fields; we only need the id
-// because callers track replies/reactions by it (and pollId == messageId).
-type sentMessage struct {
-	ID struct {
-		// WAHA returns either {id:{_serialized:"true_4179..._3EB0..."}} (older)
-		// or a flat {id:"..."} (newer). We accept both via UnmarshalJSON below.
-		Serialized string `json:"_serialized"`
-	} `json:"id"`
-}
-
 // rawSentMessage is the union-shape decoder for the response id field. WAHA
 // has flipped this representation between releases.
 type rawSentMessage struct {

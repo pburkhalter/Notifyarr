@@ -85,6 +85,15 @@ CREATE TABLE IF NOT EXISTS polls (
   title       TEXT NOT NULL,
   PRIMARY KEY (poll_id, option_idx)
 );
+
+-- One row per delivered /notify/send, keyed by the caller's idempotency key,
+-- so a retried delivery is answered with the message already sent.
+CREATE TABLE IF NOT EXISTS sends (
+  idem_key    TEXT PRIMARY KEY,
+  message_id  TEXT NOT NULL,
+  sent_at     DATETIME NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sends_sent ON sends(sent_at);
 `
 	_, err := s.db.ExecContext(ctx, schema)
 	return err
@@ -215,4 +224,34 @@ func (s *Store) LookupPoll(ctx context.Context, pollID string, idx int) (*PollOp
 		return nil, err
 	}
 	return o, nil
+}
+
+// ─── sends (idempotent /notify/send) ─────────────────────────────────────
+
+// LookupSend returns the message id already delivered under an idempotency
+// key, or ErrNotFound.
+func (s *Store) LookupSend(ctx context.Context, key string) (string, error) {
+	var id string
+	err := s.db.QueryRowContext(ctx, `SELECT message_id FROM sends WHERE idem_key = ?`, key).Scan(&id)
+	if err == sql.ErrNoRows {
+		return "", ErrNotFound
+	}
+	return id, err
+}
+
+// RecordSend remembers a delivery under its idempotency key.
+func (s *Store) RecordSend(ctx context.Context, key, messageID string) error {
+	_, err := s.db.ExecContext(ctx, `INSERT OR REPLACE INTO sends (idem_key, message_id, sent_at)
+		VALUES (?, ?, ?)`, key, messageID, time.Now().UTC())
+	return err
+}
+
+// ReapSends drops delivery records older than maxAge; a retry that late is
+// not a retry any more.
+func (s *Store) ReapSends(ctx context.Context, maxAge time.Duration) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM sends WHERE sent_at < ?`, time.Now().UTC().Add(-maxAge))
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }

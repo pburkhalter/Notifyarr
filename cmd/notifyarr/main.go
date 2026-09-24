@@ -96,9 +96,14 @@ func run() error {
 	//   /healthz               ← container healthcheck
 	mux := http.NewServeMux()
 	mux.Handle("/notify/send", bot.NotifyHandler()) // Journarr-owned notifications (NOTIFY_MODE=journarr)
+	if cfg.WAHAWebhookHMACKey == "" && !cfg.WAHAWebhookInsecure {
+		log.Warn("WAHA_WEBHOOK_HMAC_KEY not set — /waha-webhook answers 503, the bot is off (set WAHA_WEBHOOK_INSECURE=true to accept unsigned events)")
+	}
 	mux.Handle("/waha-webhook", (&waha.Receiver{
-		Handler: bot,
-		Logger:  log.With("component", "waha"),
+		Handler:       bot,
+		Logger:        log.With("component", "waha"),
+		HMACKey:       cfg.WAHAWebhookHMACKey,
+		AllowInsecure: cfg.WAHAWebhookInsecure,
 	}).HTTPHandler())
 	mux.Handle("/streaming-status.json", bot.StreamingStatusHandler())
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -141,6 +146,9 @@ func reapLoop(ctx context.Context, st *store.Store, log *slog.Logger) {
 		case <-ticker.C:
 			if _, err := st.ReapSearches(ctx); err != nil {
 				log.Warn("reap failed", "err", err)
+			}
+			if _, err := st.ReapSends(ctx, 30*24*time.Hour); err != nil {
+				log.Warn("reap sends failed", "err", err)
 			}
 		}
 	}

@@ -42,11 +42,30 @@ func (b *Bot) NotifyHandler() http.Handler {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
+
+		// A retried delivery (the caller timed out while we were still
+		// sending) is answered with the message already on its way instead of
+		// producing a second one. The key is the caller's; without one every
+		// call is a fresh send, as before.
+		key := strings.TrimSpace(r.Header.Get("X-Idempotency-Key"))
+		if key != "" {
+			if id, err := b.Store.LookupSend(ctx, key); err == nil {
+				b.Log.Info("notify/send replayed", "key", key, "message_id", id, "tmdb", n.TmdbID)
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]any{"message_id": id, "replayed": true})
+				return
+			}
+		}
 		msgID, err := b.sendNotification(ctx, n)
 		if err != nil {
 			b.Log.Warn("notify/send failed", "err", err, "tmdb", n.TmdbID)
 			http.Error(w, "send failed", http.StatusBadGateway)
 			return
+		}
+		if key != "" {
+			if err := b.Store.RecordSend(ctx, key, msgID); err != nil {
+				b.Log.Warn("notify/send: record delivery", "key", key, "err", err)
+			}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"message_id": msgID})
@@ -120,11 +139,4 @@ func (b *Bot) sendNotification(ctx context.Context, n notifyRequest) (string, er
 		// image can 422 on NOWEB — fall through to text.
 	}
 	return b.WAHA.SendText(ctx, b.Cfg.WAHAChatID, text, mentions)
-}
-
-func plural(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "s"
 }

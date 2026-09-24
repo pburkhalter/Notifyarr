@@ -60,7 +60,7 @@ func waitOr(t *testing.T, wg *sync.WaitGroup, d time.Duration, what string) {
 func TestWebhookDispatchesMessage(t *testing.T) {
 	h := &stubHandler{}
 	h.wgMsg.Add(1)
-	rcv := &Receiver{Handler: h}
+	rcv := &Receiver{Handler: h, AllowInsecure: true}
 	srv := httptest.NewServer(rcv.HTTPHandler())
 	defer srv.Close()
 
@@ -103,7 +103,7 @@ func TestWebhookDispatchesMessage(t *testing.T) {
 
 func TestWebhookFiltersFromMe(t *testing.T) {
 	h := &stubHandler{}
-	rcv := &Receiver{Handler: h}
+	rcv := &Receiver{Handler: h, AllowInsecure: true}
 	srv := httptest.NewServer(rcv.HTTPHandler())
 	defer srv.Close()
 
@@ -125,7 +125,7 @@ func TestWebhookFiltersFromMe(t *testing.T) {
 func TestWebhookDispatchesGroupJoin(t *testing.T) {
 	h := &stubHandler{}
 	h.wgJoin.Add(1)
-	rcv := &Receiver{Handler: h}
+	rcv := &Receiver{Handler: h, AllowInsecure: true}
 	srv := httptest.NewServer(rcv.HTTPHandler())
 	defer srv.Close()
 
@@ -157,7 +157,7 @@ func TestWebhookDispatchesGroupJoin(t *testing.T) {
 func TestWebhookDispatchesPollVote(t *testing.T) {
 	h := &stubHandler{}
 	h.wgVote.Add(1)
-	rcv := &Receiver{Handler: h}
+	rcv := &Receiver{Handler: h, AllowInsecure: true}
 	srv := httptest.NewServer(rcv.HTTPHandler())
 	defer srv.Close()
 
@@ -187,7 +187,7 @@ func TestWebhookDispatchesPollVote(t *testing.T) {
 
 func TestWebhookUnknownEventReturns200(t *testing.T) {
 	h := &stubHandler{}
-	rcv := &Receiver{Handler: h}
+	rcv := &Receiver{Handler: h, AllowInsecure: true}
 	srv := httptest.NewServer(rcv.HTTPHandler())
 	defer srv.Close()
 
@@ -209,7 +209,7 @@ func TestWebhookUnknownEventReturns200(t *testing.T) {
 }
 
 func TestWebhookRejectsNonPOST(t *testing.T) {
-	rcv := &Receiver{}
+	rcv := &Receiver{AllowInsecure: true}
 	srv := httptest.NewServer(rcv.HTTPHandler())
 	defer srv.Close()
 
@@ -224,7 +224,7 @@ func TestWebhookRejectsNonPOST(t *testing.T) {
 }
 
 func TestWebhookBadJSONReturns400(t *testing.T) {
-	rcv := &Receiver{}
+	rcv := &Receiver{AllowInsecure: true}
 	srv := httptest.NewServer(rcv.HTTPHandler())
 	defer srv.Close()
 
