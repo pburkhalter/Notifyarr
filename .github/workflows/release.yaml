@@ -43,7 +43,7 @@ jobs:
             type=sha,format=short,prefix=sha-,enable={{is_default_branch}}
             type=semver,pattern=v{{version}}
             type=semver,pattern=v{{major}}.{{minor}}
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: ./deploy/Dockerfile
