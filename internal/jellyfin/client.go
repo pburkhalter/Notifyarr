@@ -96,17 +96,11 @@ func (c *Client) Counts(ctx context.Context) (*Counts, error) {
 	return &out, nil
 }
 
-// PosterURL is the URL handed to WAHA's sendImage. The api_key query param is
-// included so it works even when the Jellyfin instance disallows anonymous
-// image access — WAHA fetches the URL server-side, never client-facing, so
-// leaking the key over WhatsApp isn't a concern.
+// PosterURL is the URL handed to WAHA's sendImage. It carries no credentials:
+// Jellyfin serves item images without authentication, and a key in the query
+// string would end up in WAHA's request logs.
 func (c *Client) PosterURL(itemID string) string {
-	q := url.Values{}
-	q.Set("maxWidth", "500")
-	if c.APIKey != "" {
-		q.Set("api_key", c.APIKey)
-	}
-	return fmt.Sprintf("%s/Items/%s/Images/Primary?%s", c.BaseURL, url.PathEscape(itemID), q.Encode())
+	return fmt.Sprintf("%s/Items/%s/Images/Primary?maxWidth=500", c.BaseURL, url.PathEscape(itemID))
 }
 
 // Lookup is the slim result of a TMDB→Jellyfin id resolution.
@@ -252,8 +246,13 @@ func ItemWebURL(externalURL, itemID, serverID string) string {
 	return fmt.Sprintf("%s/web/#/details?%s", externalURL, q.Encode())
 }
 
+// auth sends the API key in the Authorization header using Jellyfin's
+// MediaBrowser scheme, the form its API documents. Jellyfin 12 turns legacy
+// authorization off by default and then answers 401 to the X-Emby-Token
+// header and the api_key query parameter. API keys are hex strings, so the
+// quoted value needs no escaping.
 func (c *Client) auth(req *http.Request) {
-	req.Header.Set("X-Emby-Token", c.APIKey)
+	req.Header.Set("Authorization", `MediaBrowser Token="`+c.APIKey+`"`)
 	req.Header.Set("Accept", "application/json")
 }
 
