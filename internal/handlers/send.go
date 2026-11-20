@@ -80,8 +80,8 @@ func (b *Bot) sendNotification(ctx context.Context, n notifyRequest) (string, er
 	}
 	link := b.jellyfinLink(ctx, n.TmdbID, n.MediaType)
 
-	// Qualität der importierten Datei — bei mehreren Folgen stellvertretend die
-	// erste, sie stammen aus demselben Grab und teilen die Qualität.
+	// Quality of the imported file — for several episodes the first stands for
+	// all, they come from the same grab and share the quality.
 	var q qualityInfo
 	if n.MediaType == "tv" && len(n.Episodes) > 0 {
 		q = b.lookupQuality(ctx, n.MediaType, n.TmdbID, n.Episodes[0].Season, n.Episodes[0].Episode)
@@ -120,7 +120,10 @@ func (b *Bot) sendNotification(ctx context.Context, n notifyRequest) (string, er
 		if q.Detail != "" {
 			fmt.Fprintf(&body, " · %s", q.Detail)
 		}
-		if q.Limited {
+		switch {
+		case q.NotGerman:
+			body.WriteString("\nWird automatisch durch die deutsche Fassung ersetzt, sobald es sie gibt")
+		case q.Limited:
 			body.WriteString("\nWird automatisch ersetzt, sobald eine bessere Fassung erscheint")
 		}
 	}
